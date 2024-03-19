@@ -20,7 +20,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
     @IBOutlet weak var startView: UIView!
     @IBOutlet weak var maxAcceLabel: UILabel!
     
-    let speedLimit = 115.0 // km/h
+    let speedLimit = 115.0
     var clLocationManager: CLLocationManager!
     var clStartLocation: CLLocation?
     var clLastLocation: CLLocation?
@@ -34,6 +34,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
     var isUpdatingLocation: Bool = false
     let speedFormat = "%.1f km/h"
     let speedMesaueUnit = 3.6
+    var isSpeedLimitBreaked = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -62,30 +63,28 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
         currSpeedLabel.text = "0.00 km/h"
         myMap.showsUserLocation = false
         myMap.setUserTrackingMode(.none, animated: true)
-        isUpdatingLocation = false
+        isUpdatingLocation = true
     }
     
     // Function called to get location from location manager
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard isUpdatingLocation, let liveLocation = locations.last else { return }
+        // Calculating current speed
         let currentSpeed = liveLocation.speed
         currSpeedLabel.text = String(format: speedFormat, abs(currentSpeed) * speedMesaueUnit)
-        if(abs(currentSpeed)*3.6) >= speedLimit {
-            stopView.isHidden = false
-        }else{
-            stopView.isHidden = true
-        }
         
+        // Calculatting max Speed
         if currentSpeed > clMaxSpeed {
             clMaxSpeed = currentSpeed
             maxSpeedLabel.text = String(format: speedFormat, abs(clMaxSpeed) * speedMesaueUnit)
         }
-        
+        // Calculatting average speed
         totalSpeed += currentSpeed
         speedReadings += 1
         let averageSpeed = totalSpeed / Double(speedReadings)
         aveSpeedLabel.text = String(format: speedFormat, abs(averageSpeed) * speedMesaueUnit)
         
+        // Calculating ditance
         if let lastLocation = clLastLocation {
             let distanceIncrement = liveLocation.distance(from: lastLocation)
             clDistance += distanceIncrement
@@ -95,19 +94,21 @@ class ViewController: UIViewController, CLLocationManagerDelegate {
             clSpeed = (currentSpeed - lastLocation.speed) / timeIncrement
             maxAcceLabel.text = String(format: "%.1f m/s²", abs(clSpeed))
         }
-        
+        // Check for speed limit
+        if(abs(currentSpeed)*3.6) >= speedLimit {
+            stopView.isHidden = false
+            if(!isSpeedLimitBreaked){
+                let distanceTraveled = String(format: "%.2f km", clDistance / 1000)
+                print("Distance traveled before exceeding speed limit: \(distanceTraveled)")
+                isSpeedLimitBreaked = true
+            }
+        }else{
+            stopView.isHidden = true
+        }
         clLastLocation = liveLocation
-        
-        // Update map to show driver's location with zoom in
+        // Updating location on map view
         myMap.setCenter(liveLocation.coordinate, animated: true)
         let region = MKCoordinateRegion(center: liveLocation.coordinate, latitudinalMeters: 500, longitudinalMeters: 500)
         myMap.setRegion(region, animated: true)
-    }
-    
-    func calculateDistanceToExceedSpeedLimit() -> CLLocationDistance {
-        let averageSpeed = totalSpeed / Double(speedReadings)
-        let timeToExceedLimit = (speedLimit / (averageSpeed * speedMesaueUnit))
-        let distanceToExceedLimit = timeToExceedLimit * clMaxSpeed * speedMesaueUnit * 1000
-        return distanceToExceedLimit
     }
 }
